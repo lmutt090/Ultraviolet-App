@@ -49,14 +49,11 @@ client.on('ready', () => {
         });
 });
 
-async function sendOutputToAllowedUsers(message, excludeGuildId = null) {
+async function sendOutputToAllowedUsers(message) {
     for (const userId of allowedUsers) {
         try {
             const user = await client.users.fetch(userId);
-            const member = await client.guilds.cache.some(guild => guild.id === excludeGuildId && guild.members.cache.has(userId));
-            if (!member) {
-                await user.send(message);
-            }
+            await user.send(message);
         } catch (err) {
             console.error(`Failed to send DM to ${userId}: ${err.message}`);
         }
@@ -79,9 +76,15 @@ client.on('interactionCreate', async (interaction) => {
             await sendOutputToAllowedUsers(output, interaction.guildId);
         });
 
-        exec('lt --port 8080 --subdomain lmutt090prox', async (err, stdout, stderr) => {
+        exec('lt --port 8080', async (err, stdout, stderr) => {
             const output = err ? `Error starting localtunnel: ${err.message}` : `lt output: ${stdout}`;
             console.log(output);
+            await interaction.followUp(output);
+            await sendOutputToAllowedUsers(output, interaction.guildId);
+        });
+
+        exec('curl https://loca.lt/mytunnelpassword', async (err, stdout, stderr) => {
+            const output = err ? `Error fetching URL: ${err.message}` : `URL output: ${stdout}`;
             await interaction.followUp(output);
             await sendOutputToAllowedUsers(output, interaction.guildId);
         });
@@ -102,11 +105,16 @@ client.on('messageCreate', async (message) => {
             await sendOutputToAllowedUsers(output, message.guild?.id);
         });
 
-        exec('lt --port 8080 --subdomain lmutt090prox', async (err, stdout, stderr) => {
+        exec('lt --port 8080', async (err, stdout, stderr) => {
             const output = err ? `Error starting localtunnel: ${err.message}` : `lt output: ${stdout}`;
             console.log(output);
             message.reply(output);
             await sendOutputToAllowedUsers(output, message.guild?.id);
+        });
+        exec('curl https://loca.lt/mytunnelpassword', async (err, stdout, stderr) => {
+            const output = err ? `Error fetching URL: ${err.message}` : `URL output: ${stdout}`;
+            message.reply(output);
+            await sendOutputToAllowedUsers(output, interaction.guildId);
         });
     }
 });
