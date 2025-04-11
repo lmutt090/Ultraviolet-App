@@ -8,6 +8,8 @@ const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.DirectMessages]
 });
 
+const allowedUsers = ['USER_ID_1', 'USER_ID_2']; // Add allowed user IDs here
+
 // Slash command registration
 const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
 
@@ -16,13 +18,15 @@ const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
         console.log('Started refreshing application (slash) commands.');
 
         await rest.put(
-            Routes.applicationCommands('YOUR_CLIENT_ID'), // Replace YOUR_CLIENT_ID with your bot's Client ID
-            { body: [
-                {
-                    name: 'startproxy',
-                    description: 'Starts npm and sets up LocalTunnel',
-                },
-            ] }
+            Routes.applicationCommands(process.env.CLIENT_ID),
+            {
+                body: [
+                    {
+                        name: 'startproxy',
+                        description: 'Starts npm and sets up LocalTunnel',
+                    },
+                ]
+            }
         );
 
         console.log('Successfully reloaded application (slash) commands.');
@@ -34,8 +38,7 @@ const rest = new REST({ version: '10' }).setToken(process.env.BOT_TOKEN);
 client.on('ready', () => {
     console.log(`Logged in as ${client.user.tag}!`);
 
-    // DM the specific user when the bot is running
-    const userId = '1286383453016686705';
+    const userId = process.env.USER_ID;
     client.users.fetch(userId)
         .then(user => {
             user.send('The bot is now running!');
@@ -46,64 +49,64 @@ client.on('ready', () => {
         });
 });
 
+async function sendOutputToAllowedUsers(message, excludeGuildId = null) {
+    for (const userId of allowedUsers) {
+        try {
+            const user = await client.users.fetch(userId);
+            const member = await client.guilds.cache.some(guild => guild.id === excludeGuildId && guild.members.cache.has(userId));
+            if (!member) {
+                await user.send(message);
+            }
+        } catch (err) {
+            console.error(`Failed to send DM to ${userId}: ${err.message}`);
+        }
+    }
+}
+
 client.on('interactionCreate', async (interaction) => {
     if (!interaction.isCommand()) return;
+    if (!allowedUsers.includes(interaction.user.id)) return;
 
     const { commandName } = interaction;
 
     if (commandName === 'startproxy') {
         await interaction.reply('Starting proxy...');
 
-        // Run `npm start`
-        exec('npm start', (err, stdout, stderr) => {
-            if (err) {
-                console.error(`Error starting npm: ${err.message}`);
-                interaction.followUp(`Error starting npm: ${err.message}`);
-                return;
-            }
-            console.log(`npm start output: ${stdout}`);
-            interaction.followUp(`npm start output: ${stdout}`);
+        exec('npm start', async (err, stdout, stderr) => {
+            const output = err ? `Error starting npm: ${err.message}` : `npm start output: ${stdout}`;
+            console.log(output);
+            await interaction.followUp(output);
+            await sendOutputToAllowedUsers(output, interaction.guildId);
         });
 
-        // Run `lt --port 8080 --subdomain lmutt090prox`
-        exec('lt --port 8080 --subdomain lmutt090prox', (err, stdout, stderr) => {
-            if (err) {
-                console.error(`Error starting localtunnel: ${err.message}`);
-                interaction.followUp(`Error starting localtunnel: ${err.message}`);
-                return;
-            }
-            console.log(`lt output: ${stdout}`);
-            interaction.followUp(`lt output: ${stdout}`);
+        exec('lt --port 8080 --subdomain lmutt090prox', async (err, stdout, stderr) => {
+            const output = err ? `Error starting localtunnel: ${err.message}` : `lt output: ${stdout}`;
+            console.log(output);
+            await interaction.followUp(output);
+            await sendOutputToAllowedUsers(output, interaction.guildId);
         });
     }
 });
 
-client.on('messageCreate', (message) => {
-    if (message.content === '$startproxy') {
-        if (message.author.bot) return;
+client.on('messageCreate', async (message) => {
+    if (message.author.bot) return;
+    if (!allowedUsers.includes(message.author.id)) return;
 
+    if (message.content === '$startproxy') {
         message.reply('Starting proxy...');
 
-        // Run `npm start`
-        exec('npm start', (err, stdout, stderr) => {
-            if (err) {
-                console.error(`Error starting npm: ${err.message}`);
-                message.reply(`Error starting npm: ${err.message}`);
-                return;
-            }
-            console.log(`npm start output: ${stdout}`);
-            message.reply(`npm start output: ${stdout}`);
+        exec('npm start', async (err, stdout, stderr) => {
+            const output = err ? `Error starting npm: ${err.message}` : `npm start output: ${stdout}`;
+            console.log(output);
+            message.reply(output);
+            await sendOutputToAllowedUsers(output, message.guild?.id);
         });
 
-        // Run `lt --port 8080 --subdomain lmutt090prox`
-        exec('lt --port 8080 --subdomain lmutt090prox', (err, stdout, stderr) => {
-            if (err) {
-                console.error(`Error starting localtunnel: ${err.message}`);
-                message.reply(`Error starting localtunnel: ${err.message}`);
-                return;
-            }
-            console.log(`lt output: ${stdout}`);
-            message.reply(`lt output: ${stdout}`);
+        exec('lt --port 8080 --subdomain lmutt090prox', async (err, stdout, stderr) => {
+            const output = err ? `Error starting localtunnel: ${err.message}` : `lt output: ${stdout}`;
+            console.log(output);
+            message.reply(output);
+            await sendOutputToAllowedUsers(output, message.guild?.id);
         });
     }
 });
